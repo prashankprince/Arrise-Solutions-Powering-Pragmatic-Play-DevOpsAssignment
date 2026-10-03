@@ -108,3 +108,68 @@ instance_ids = {
 
 
 The actual IDs and IP addresses are assigned by AWS during deployment.
+
+# Task 2 - Remote State and Locking
+
+## Local State Behavior
+
+Before configuring a remote backend, Terraform uses the local backend
+by default. The Terraform state is stored in a local `terraform.tfstate`
+file on the machine running Terraform.
+
+If two developers run `terraform apply` at the same time using separate
+local state files, they do not share a common state or locking mechanism.
+Each Terraform process may operate using its own potentially stale copy
+of state. Concurrent changes can therefore result in conflicting
+infrastructure operations or inconsistent state.
+
+## Remote State
+
+The configuration was changed to use an Amazon S3 backend.
+
+The S3 backend stores the Terraform state remotely at:
+
+    ec2-multi-instance/terraform.tfstate
+
+This allows team members to work against the same shared state rather
+than separate local state files.
+
+## State Locking
+
+A DynamoDB table named `terraform-state-lock` is configured for Terraform
+state locking.
+
+When Terraform performs an operation that can modify state, it acquires
+a lock. If another Terraform process attempts to perform a conflicting
+operation while the state is locked, Terraform cannot acquire the lock
+and does not proceed with the state-changing operation.
+
+After the first Terraform operation completes, the lock is released.
+
+This prevents multiple users from modifying the same Terraform state
+concurrently.
+
+## Backend Resources
+
+The backend consists of:
+
+- Amazon S3 bucket for remote Terraform state
+- S3 bucket versioning for state recovery
+- S3 server-side encryption
+- DynamoDB table for state locking
+
+The S3 bucket and DynamoDB table are created separately using the
+`bootstrap` Terraform configuration because the backend infrastructure
+must exist before Terraform can initialize and use the S3 backend.
+
+Note - Hashicorp documents DynamoDB locking is deprecated and S3 native locking
+should be used.
+example - 
+``
+backend "s3" {
+  bucket       = "my-terraform-state-2026-prashank"
+  key          = "ec2-multi-instance/terraform.tfstate"
+  region       = "us-east-1"
+  use_lockfile = true
+}
+``
